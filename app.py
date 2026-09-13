@@ -203,7 +203,16 @@ footer { display: none !important; }
 .tabitem { background: transparent !important; border: none !important; padding: 24px !important; }
 
 .upload-zone { border: 2px dashed var(--border-medium) !important; border-radius: var(--radius-xl) !important; padding: 48px 32px !important; text-align: center !important; background: var(--bg-card) !important; transition: all var(--duration-normal) var(--ease-out) !important; cursor: pointer !important; position: relative; overflow: hidden; }
-.upload-zone::before { content: ''; position: absolute; inset: 0; background: var(--accent-gradient-subtle); opacity: 0; transition: opacity var(--duration-normal); }
+.upload-zone::before { content: ''; position: absolute; inset: 0; background: var(--accent-gradient-subtle); opacity: 0; transition: opacity var(--duration-normal); pointer-events: none; }
+.upload-zone button, .upload-zone input, .upload-zone label, .upload-zone [role="button"] { position: relative; z-index: 2; }
+.upload-zone button { min-height: 44px !important; touch-action: manipulation; }
+.upload-zone input[type="file"] { cursor: pointer; }
+.upload-zone .file-preview { position: relative; z-index: 2; }
+.audio-preview { margin-top: 14px !important; }
+@media (pointer: coarse) {
+  .upload-zone { min-height: 150px !important; }
+  .upload-zone button, .upload-zone [role="button"] { min-width: 160px; padding: 12px 18px !important; }
+}
 .upload-zone:hover { border-color: var(--accent-1) !important; box-shadow: var(--shadow-glow) !important; }
 .upload-zone:hover::before { opacity: 1; }
 .upload-zone .upload-icon { font-size: 48px; margin-bottom: 16px; display: block; animation: float 3s ease-in-out infinite; }
@@ -1598,6 +1607,15 @@ def _error_banner(message: str) -> str:
     return f'<div class="glass-card" style="border-color: rgba(255,107,107,0.3);"><div style="color:#ff6b6b;font-weight:600;">⚠ Analysis Error</div><div style="color:var(--text-secondary);margin-top:8px;">{html.escape(message)}</div></div>'
 
 
+def sync_audio_preview(file_path: Optional[str]) -> Optional[str]:
+    """Pass a selected File filepath to the read-only cross-platform player."""
+    if not file_path:
+        return None
+    if isinstance(file_path, (list, tuple)):
+        return str(file_path[0]) if file_path else None
+    return str(file_path)
+
+
 def _module_errors(results: Mapping[str, Any]) -> List[str]:
     """Collect non-fatal analysis module errors."""
     errors = []
@@ -1764,7 +1782,13 @@ def build_ui() -> gr.Blocks:
                 gr.HTML('<div style="text-align:right;padding-top:8px;"><span class="version-badge">v2.0 Live</span></div>')
 
         with gr.Column(elem_classes="glass-card", elem_id="upload-section"):
-            audio_input = gr.Audio(label=None, type="filepath", sources=["upload"], elem_classes="upload-zone")
+            gr.HTML('<div class="upload-icon">🎵</div><div class="upload-text">Tap or click to choose your track</div><div class="upload-hint">The system file picker works on Windows, macOS, Linux, Android, and iOS</div>')
+            # A dedicated File component is more reliable than the combined
+            # Audio uploader on touch browsers, Safari, and mobile WebViews.
+            # It still returns a normal local filepath for the DSP pipeline.
+            audio_input = gr.File(label="Choose audio file", show_label=True, file_count="single", file_types=sorted(SUPPORTED_EXTENSIONS), type="filepath", elem_classes="upload-zone", elem_id="audio-file-upload", height=160)
+            audio_preview = gr.Audio(label="Selected track", type="filepath", sources=[], interactive=False, elem_classes="audio-preview")
+            audio_input.change(fn=sync_audio_preview, inputs=[audio_input], outputs=[audio_preview], show_progress="hidden")
             gr.HTML('<div class="format-badges"><span class="format-badge">MP3</span><span class="format-badge">WAV</span><span class="format-badge">FLAC</span><span class="format-badge">OGG</span><span class="format-badge">M4A</span></div><div class="upload-hint">Max 50MB · Native sample rate preserved for stereo analysis</div>')
             analyze_btn = gr.Button("⚡  ANALYZE TRACK", variant="primary", size="lg", elem_classes="analyze-btn")
             progress_area = gr.Column(visible=False)
